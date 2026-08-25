@@ -1,0 +1,17 @@
+{
+  "name": "pinturillo-integracion",
+  "version": "0.1.0",
+  "description": "Juego de dibujar y adivinar para chicos con TEA en programa de integracion (uso en aula, sin internet)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_ws.js"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

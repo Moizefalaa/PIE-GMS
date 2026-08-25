@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Pinturillo · Alumno</title>
+<style>
+  :root { --bg:#f3f6fb; --panel:#ffffff; --ink:#2d3748; --soft:#718096; --line:#e2e8f0;
+          --accent:#2b6cb0; --ok:#38a169; --no:#e53e3e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); padding:16px; }
+  h1 { font-size:18px; text-align:center; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; max-width:520px; margin:0 auto; }
+  label { display:block; color:var(--soft); font-size:13px; margin:10px 0 4px; }
+  input { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font:inherit; }
+  button { cursor:pointer; border:0; border-radius:8px; padding:12px; background:var(--accent); color:#fff; width:100%; margin-top:12px; font-size:15px; }
+  #status { text-align:center; color:var(--soft); min-height:20px; margin-top:10px; }
+  #feedback { text-align:center; font-weight:700; font-size:18px; min-height:24px; }
+  .chk { font-size:13px; }
+  .chk input { width:auto; vertical-align:middle; }
+  #feedback.ok { color:var(--ok); } #feedback.no { color:var(--no); }
+  #timer { text-align:center; font-size:20px; font-weight:700; color:var(--accent); min-height:24px; }
+  #timer.low { color:#b7791f; }
+  #reward { text-align:center; margin:12px 0; animation: pop 0.6s ease; }
+  #reward .star { font-size:56px; line-height:1; }
+  #reward .reward-text { font-size:20px; font-weight:700; color:var(--ok); margin-top:4px; }
+  @keyframes pop { 0%{ transform:scale(0.5); opacity:0; } 60%{ transform:scale(1.1); opacity:1; } 100%{ transform:scale(1); opacity:1; } }
+  body.calm * { animation: none !important; transition: none !important; }
+  body.calm { font-size:18px; }
+  body.calm .card, body.calm button, body.calm input { font-size:1.05em; padding:16px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  canvas { width:100%; height:auto; background:#fff; border:2px solid var(--line); border-radius:12px; margin-top:10px; }
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .card { background:#f7fafc; border:1px solid var(--line); border-radius:10px; padding:14px 10px; font-size:15px; cursor:pointer; }
+  .card:disabled { opacity:.5; cursor:default; }
+</style>
+</head>
+<body>
+<h1>Pinturillo · Integración</h1>
+<label class="chk" style="display:block;text-align:center;color:var(--soft)"><input type="checkbox" id="calm"> Modo calma</label>
+<div class="box">
+  <div id="join">
+    <label>Código de sala</label>
+    <input id="codeIn" inputmode="numeric" placeholder="Ej. 4821" maxlength="4">
+    <label>Tu nombre (o apodo)</label>
+    <input id="alias" placeholder="Tu nombre" maxlength="20">
+    <button id="joinBtn">Unirme a la sala</button>
+    <p id="status"></p>
+  </div>
+  <div id="game" style="display:none">
+    <canvas id="board" width="600" height="400"></canvas>
+    <div id="drawerPanel" style="display:none">
+      <p>Toca para dibujar: <strong id="wordToDraw"></strong></p>
+      <button id="clearBtn">Limpiar mi dibujo</button>
+    </div>
+    <p id="timer"></p>
+    <div id="reward" style="display:none">
+      <div class="star">⭐</div>
+      <div class="reward-text">¡Bien hecho!</div>
+    </div>
+    <div id="feedback"></div>
+    <div id="options" class="cards"></div>
+    <p id="status"></p>
+  </div>
+</div>
+<script src="player.js"></script>
+</body>
+</html>
