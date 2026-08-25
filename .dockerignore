@@ -1,0 +1,12 @@
+node_modules
+target
+*.log
+boot.*
+.vaadin
+.git
+.idea
+.vscode
+frontend/node_modules
+frontend/generated
+mvnw
+mvnw.cmd
