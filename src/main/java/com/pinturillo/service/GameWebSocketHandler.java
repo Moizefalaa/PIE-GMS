@@ -2,6 +2,7 @@ package com.pinturillo.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pinturillo.model.Player;
+import com.pinturillo.model.Round;
 import com.pinturillo.model.Room;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
@@ -61,17 +62,20 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 String code = (String) msg.get("code");
                 String clientId = (String) msg.get("clientId");
                 String alias = (String) msg.get("alias");
-                Player p = roomService.joinRoom(code, clientId, alias);
-                if (p == null) {
+                Room room = roomService.getRoom(code);
+                if (room == null) {
                     send(session, Map.of("type", "error", "msg", "Sala no encontrada"));
                     return;
                 }
-                Client c = new Client();
-                c.session = session; c.roomCode = code; c.clientId = clientId; c.role = "player";
+                boolean reconnected = room.isKnown(clientId);
+                roomService.joinRoom(code, clientId, alias);
+                room.markSeen(clientId);
+                Client c = clients.get(session.getId());
+                if (c == null) c = new Client();
+                c.session = session; c.roomCode = code; c.clientId = clientId;
+                if (c.role == null) c.role = "player";
                 clients.put(session.getId(), c);
-                boolean reconnected = self != null;
                 send(session, Map.of("type", "joined", "id", clientId, "reconnected", reconnected));
-                Room room = roomService.getRoom(code);
                 if (room.getRound() != null) {
                     boolean isDrawer = clientId.equals(room.getRound().getDrawerId());
                     Map<String, Object> r = new HashMap<>();
@@ -91,10 +95,15 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 String mode = (String) msg.get("mode");
                 String drawerId = (String) msg.get("drawerId");
                 boolean timerEnabled = Boolean.parseBoolean(String.valueOf(msg.get("timerEnabled")));
-                int timerSeconds = ((Number) msg.get("timerSeconds")).intValue();
+                Number tsec = (Number) msg.get("timerSeconds");
+                int timerSeconds = tsec == null ? 0 : tsec.intValue();
                 Room room = roomService.getRoom(code);
                 if (room == null) return;
-                Room round = roomService.startRound(code, category, mode, drawerId);
+                room.setLastCategory(category);
+                room.setLastMode(mode);
+                room.setLastTimerEnabled(timerEnabled);
+                room.setLastTimerSeconds(timerSeconds);
+                Round round = roomService.startRound(code, category, mode, drawerId);
                 roomService.resetGuesses(code);
                 if (round == null) {
                     send(session, Map.of("type", "error", "msg", "Categoria sin suficientes palabras"));
@@ -106,25 +115,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     send(host.session, Map.of("type", "progress", "correct", 0, "total", room.getPlayers().size()));
                 }
                 if (timerEnabled && timerSeconds > 0) {
-                    long endsAt = System.currentTimeMillis() + timerSeconds * 1000L;
-                    ScheduledFuture<?> f = scheduler.scheduleAtFixedRate(() -> {
-                        int rem = (int) Math.max(0, Math.ceil((endsAt - System.currentTimeMillis()) / 1000.0));
-                        Map<String, Object> t = new HashMap<>();
-                        t.put("type", "tick");
-                        t.put("remaining", rem);
-                        broadcast(code, t, null);
-                        if (rem <= 0) {
-                            ScheduledFuture<?> fut = timers.remove(code);
-                            if (fut != null) fut.cancel(false);
-                            if (room.getRound() != null) {
-                                Map<String, Object> rev = new HashMap<>();
-                                rev.put("type", "reveal");
-                                rev.put("word", room.getRound().getWord());
-                                broadcast(code, rev, null);
-                            }
-                        }
-                    }, 0, 1, TimeUnit.SECONDS);
-                    timers.put(code, f);
+                    scheduleTimer(room, timerSeconds);
                 }
             }
             case "host_reveal" -> {
@@ -142,9 +133,38 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 if (self == null || !"host".equals(self.role)) return;
                 cancelTimer(self.roomCode);
                 Room room = roomService.getRoom(self.roomCode);
+                if (room == null) return;
                 broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
-                if (room != null) room.setRound(null);
+                String prevDrawer = room.getRound() != null ? room.getRound().getDrawerId() : null;
+                room.setRound(null);
+                List<Player> ps = room.getPlayers();
+                if (ps.isEmpty()) {
+                    Client host = findHost(self.roomCode);
+                    if (host != null) send(host.session, Map.of("type", "cleared"));
+                    return;
+                }
+                int idx = 0;
+                if (prevDrawer != null) {
+                    for (int i = 0; i < ps.size(); i++) {
+                        if (ps.get(i).getClientId().equals(prevDrawer)) { idx = i; break; }
+                    }
+                }
+                int nextIdx = (idx + 1) % ps.size();
+                String nextDrawer = ps.get(nextIdx).getClientId();
+                Round round = roomService.startRound(self.roomCode, room.getLastCategory(), room.getLastMode(), nextDrawer);
+                roomService.resetGuesses(self.roomCode);
+                if (round == null) {
+                    send(session, Map.of("type", "error", "msg", "Categoria sin suficientes palabras"));
+                    return;
+                }
+                sendRound(room);
                 Client host = findHost(self.roomCode);
+                if (host != null) {
+                    send(host.session, Map.of("type", "progress", "correct", 0, "total", room.getPlayers().size()));
+                }
+                if (room.isLastTimerEnabled() && room.getLastTimerSeconds() > 0) {
+                    scheduleTimer(room, room.getLastTimerSeconds());
+                }
                 if (host != null) send(host.session, Map.of("type", "cleared"));
             }
             case "guess" -> {
@@ -160,11 +180,11 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 Client host = findHost(self.roomCode);
                 if (host != null) {
                     send(host.session, Map.of("type", "progress", "correct", res.correctCount(), "total", res.total()));
-                    Player p = roomService.getRoom(self.roomCode).getPlayers().stream()
-                            .filter(x -> x.getClientId().equals(self.clientId)).findFirst().orElse(null);
-                    send(host.session, Map.of("type", "guess_event", "clientId", self.clientId,
-                            "alias", p != null ? p.getAlias() : "", "correct", res.correct()));
                 }
+                Player p = roomService.getRoom(self.roomCode).getPlayers().stream()
+                        .filter(x -> x.getClientId().equals(self.clientId)).findFirst().orElse(null);
+                broadcast(self.roomCode, Map.of("type", "guess_event", "clientId", self.clientId,
+                        "alias", p != null ? p.getAlias() : "", "correct", res.correct()), null);
             }
             case "draw", "draw_clear" -> {
                 if (self == null) return;
@@ -212,6 +232,30 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             m.put("word", isDrawer ? room.getRound().getWord() : null);
             send(c.session, m);
         }
+    }
+
+    private void scheduleTimer(Room room, int timerSeconds) {
+        String code = room.getCode();
+        long endsAt = System.currentTimeMillis() + timerSeconds * 1000L;
+        ScheduledFuture<?> f = scheduler.scheduleAtFixedRate(() -> {
+            int rem = (int) Math.max(0, Math.ceil((endsAt - System.currentTimeMillis()) / 1000.0));
+            Map<String, Object> t = new HashMap<>();
+            t.put("type", "tick");
+            t.put("remaining", rem);
+            broadcast(code, t, null);
+            if (rem <= 0) {
+                ScheduledFuture<?> fut = timers.remove(code);
+                if (fut != null) fut.cancel(false);
+                Room r = roomService.getRoom(code);
+                if (r != null && r.getRound() != null) {
+                    Map<String, Object> rev = new HashMap<>();
+                    rev.put("type", "reveal");
+                    rev.put("word", r.getRound().getWord());
+                    broadcast(code, rev, null);
+                }
+            }
+        }, 0, 1, TimeUnit.SECONDS);
+        timers.put(code, f);
     }
 
     private void sendPlayers(Room room) {

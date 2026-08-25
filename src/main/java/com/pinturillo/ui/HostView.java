@@ -7,8 +7,6 @@ import com.pinturillo.service.WordBankService;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.list.ListItem;
-import com.vaadin.flow.component.list.UnorderedList;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.select.Select;
@@ -69,10 +67,8 @@ public class HostView extends VerticalLayout {
             return;
         }
         roundPanel.add(new Span("Dibuja: " + r.getWord()));
-        UnorderedList list = new UnorderedList();
         for (Round.Option o : r.getOptions()) {
-            list.add(new ListItem(o.getText()));
+            roundPanel.add(new Span("• " + o.getText()));
         }
-        roundPanel.add(list);
     }
 }

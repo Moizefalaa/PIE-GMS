@@ -1,6 +1,8 @@
 package com.pinturillo.service;
 
 import com.pinturillo.model.Category;
+import com.pinturillo.model.GuessResult;
+import com.pinturillo.model.Player;
 import com.pinturillo.model.Round;
 import com.pinturillo.model.Room;
 import org.springframework.stereotype.Service;
