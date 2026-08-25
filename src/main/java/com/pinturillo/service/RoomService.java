@@ -37,6 +37,56 @@ public class RoomService {
         return rooms.get(code);
     }
 
+    public void removeRoom(String code) {
+        rooms.remove(code);
+    }
+
+    public Player joinRoom(String code, String clientId, String alias) {
+        Room room = rooms.get(code);
+        if (room == null) return null;
+        Player p = room.getPlayers().stream()
+                .filter(x -> x.getClientId().equals(clientId))
+                .findFirst()
+                .orElse(null);
+        if (p != null) {
+            p.setAlias(alias);
+        } else {
+            p = new Player(clientId, alias, "player");
+            room.addPlayer(p);
+        }
+        return p;
+    }
+
+    public void removePlayer(String code, String clientId) {
+        Room room = rooms.get(code);
+        if (room == null) return;
+        room.getPlayers().removeIf(p -> p.getClientId().equals(clientId));
+    }
+
+    public GuessResult guess(String code, String clientId, int optionId) {
+        Room room = rooms.get(code);
+        if (room == null || room.getRound() == null) return null;
+        Player p = room.getPlayers().stream()
+                .filter(x -> x.getClientId().equals(clientId))
+                .findFirst()
+                .orElse(null);
+        if (p == null || p.isGuessed()) {
+            int total = room.getPlayers().size();
+            return new GuessResult(false, false, room.getCorrectCount(), total);
+        }
+        p.setGuessed(true);
+        boolean correct = optionId == room.getRound().getCorrectId();
+        if (correct) room.setCorrectCount(room.getCorrectCount() + 1);
+        return new GuessResult(correct, true, room.getCorrectCount(), room.getPlayers().size());
+    }
+
+    public void resetGuesses(String code) {
+        Room room = rooms.get(code);
+        if (room == null) return;
+        room.getPlayers().forEach(p -> p.setGuessed(false));
+        room.setCorrectCount(0);
+    }
+
     public Round startRound(String code, String categoryKey, String mode, String drawerId) {
         Room room = rooms.get(code);
         if (room == null) return null;

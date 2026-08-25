@@ -42,7 +42,7 @@
   "pertenencia": {
     "label": "Pertenencia e identidad",
     "words": ["equipo", "camiseta", "color favorito", "musica", "aficion", "barrio", "nombre", "dibujo propio", "simbolo", "mascota"],
-    "situations": ["muestro lo que me gusta", "me siento parte del grupo", "me preguntan por mis gustos"]
+    "situations": ["muestro lo que me gusta", "me siento parte del grupo", "me preguntan por mis gustos", "comparto algo con otros"]
   },
   "apoyo": {
     "label": "Pedir y dar apoyo",
@@ -52,7 +52,7 @@
   "especiales": {
     "label": "Momentos especiales",
     "words": ["cumpleanos", "fiesta", "medalla", "viaje", "playa", "montana", "cine", "regalo", "foto", "cancion"],
-    "situations": ["me preparo para una fiesta", "estreno algo", "recuerdo algo bonito"]
+    "situations": ["me preparo para una fiesta", "estreno algo", "recuerdo algo bonito", "celebramos juntos"]
   },
   "rutinas": {
     "label": "Rutinas y transiciones (clave TEA)",

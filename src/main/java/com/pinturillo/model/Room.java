@@ -7,6 +7,7 @@ public class Room {
 
     private final String code;
     private Round round;
+    private int correctCount = 0;
     private final List<Player> players = new CopyOnWriteArrayList<>();
 
     public Room(String code) {
@@ -23,6 +24,14 @@ public class Room {
 
     public void setRound(Round round) {
         this.round = round;
+    }
+
+    public int getCorrectCount() {
+        return correctCount;
+    }
+
+    public void setCorrectCount(int correctCount) {
+        this.correctCount = correctCount;
     }
 
     public List<Player> getPlayers() {

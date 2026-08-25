@@ -5,11 +5,13 @@ public class Player {
     private String clientId;
     private String alias;
     private String role; // "host" | "player"
+    private boolean guessed;
 
     public Player(String clientId, String alias, String role) {
         this.clientId = clientId;
         this.alias = alias;
         this.role = role;
+        this.guessed = false;
     }
 
     public String getClientId() {
@@ -34,5 +36,13 @@ public class Player {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public boolean isGuessed() {
+        return guessed;
+    }
+
+    public void setGuessed(boolean guessed) {
+        this.guessed = guessed;
     }
 }

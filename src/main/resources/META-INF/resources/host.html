@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pinturillo · Sala del educador</title>
+<style>
+  :root { --bg:#f3f6fb; --panel:#ffffff; --ink:#2d3748; --soft:#718096; --line:#e2e8f0;
+          --accent:#2b6cb0; --ok:#38a169; --no:#e53e3e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:12px 20px; background:var(--panel); border-bottom:1px solid var(--line); }
+  h1 { font-size:18px; margin:0; }
+  .room { font-size:16px; } .room span { font-weight:700; font-size:22px; color:var(--accent); letter-spacing:2px; }
+  main { display:grid; grid-template-columns:300px 1fr; gap:16px; padding:16px; }
+  .left, .right { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  label { display:block; margin:8px 0 4px; color:var(--soft); font-size:13px; }
+  select, button, input { font:inherit; }
+  select { width:100%; padding:8px; border:1px solid var(--line); border-radius:8px; }
+  button { cursor:pointer; border:0; border-radius:8px; padding:10px 12px; background:var(--accent); color:#fff; margin-top:10px; width:100%; }
+  button:disabled { background:#cbd5e0; cursor:not-allowed; }
+  .tools { display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  .tools input[type=range] { width:90px; }
+  #wordBox { margin-top:12px; padding:10px; background:#ebf8ff; border-radius:8px; font-size:15px; }
+  #word { color:var(--accent); }
+  #status { color:var(--soft); min-height:20px; }
+  #progress { font-weight:600; }
+  .chk { display:flex; align-items:center; gap:6px; color:var(--ink); }
+  .chk input { width:auto; }
+  #timer { font-size:20px; font-weight:700; color:var(--accent); min-height:24px; }
+  #timer.low { color:#b7791f; }
+  #progress.bump { animation: bump 0.5s ease; }
+  @keyframes bump { 0%{ transform:scale(1); } 40%{ transform:scale(1.18); } 100%{ transform:scale(1); } }
+  body.calm * { animation: none !important; transition: none !important; }
+  body.calm { font-size: 18px; }
+  body.calm .card, body.calm button, body.calm input, body.calm select { font-size: 1.05em; padding: 14px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+  canvas { width:100%; height:auto; background:#fff; border:2px solid var(--line); border-radius:12px; touch-action:none; }
+  h3 { font-size:14px; color:var(--soft); margin:14px 0 6px; }
+  ul { margin:0; padding-left:18px; }
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .card { background:#f7fafc; border:1px solid var(--line); border-radius:8px; padding:10px; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pinturillo · Integración</h1>
+  <div class="room">Código de sala: <span id="code">....</span></div>
+</header>
+<main>
+  <section class="left">
+    <label>Categoría</label>
+    <select id="category"></select>
+    <label>Modo</label>
+    <select id="mode">
+      <option value="words">Palabra</option>
+      <option value="situations">Situación</option>
+    </select>
+    <label>Turno de dibujo</label>
+    <select id="drawer"><option value="host">Educador</option></select>
+    <label class="chk"><input type="checkbox" id="timerOn"> Temporizador (opcional, sin presión)</label>
+    <label>Segundos de la ronda <input type="number" id="timerSec" value="90" min="10" max="600" step="5"></label>
+    <label class="chk"><input type="checkbox" id="calm"> Modo calma (sin movimiento, letras grandes)</label>
+    <button id="start">Iniciar ronda</button>
+    <button id="exportBtn">Exportar participación (CSV)</button>
+    <div id="wordBox" style="display:none">Dibuja: <strong id="word"></strong></div>
+    <div class="tools">
+      <span>Color <input type="color" id="color" value="#2b6cb0"></span>
+      <span>Grosor <input type="range" id="size" min="2" max="20" value="4"></span>
+      <button id="clearBtn" style="width:auto;margin:0">Limpiar</button>
+    </div>
+    <button id="revealBtn" disabled>Revelar respuesta</button>
+    <button id="nextBtn">Siguiente ronda</button>
+    <p id="status"></p>
+    <p id="timer"></p>
+    <p id="progress"></p>
+  </section>
+  <section class="right">
+    <canvas id="board" width="900" height="600"></canvas>
+    <h3>Jugadores conectados</h3>
+    <ul id="players"><li>(sin jugadores)</li></ul>
+    <h3>Tarjetas de la ronda (referencia)</h3>
+    <div id="options" class="cards"></div>
+  </section>
+</main>
+<script src="host.js"></script>
+</body>
+</html>
