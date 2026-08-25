@@ -1,0 +1,15 @@
+version: 1.0
+runtime: docker
+name: pinturillo-tea
+image:
+  # Reemplazar por tu rol de ejecucion de App Runner y tu imagen ECR
+  executionRoleArn: "<ARN-ROLE-EJECUCION-APPRUNNER>"
+  imageUri: "<CUENTA>.dkr.ecr.<REGION>.amazonaws.com/pinturillo-tea:latest"
+  port: 8080
+healthCheck:
+  path: /api/wordbank
+  interval: 10
+  timeout: 5
+  healthyThreshold: 3
+  unhealthyThreshold: 5
+  protocol: HTTP
