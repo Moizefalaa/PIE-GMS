@@ -1,4 +1,17 @@
+# Node (prototipo de referencia)
 node_modules/
 server.log
 *.log
+
+# Java / Maven
+target/
+*.class
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
 .DS_Store

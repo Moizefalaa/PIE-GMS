@@ -1,0 +1,62 @@
+{
+  "emociones": {
+    "label": "Emociones (lo que siento)",
+    "words": ["alegria", "enfado", "tristeza", "miedo", "sorpresa", "verguenza", "orgullo", "calma", "nervios", "aburrimiento", "tranquilidad", "emocion", "confusion", "alivio"],
+    "situations": ["alguien te quita el sitio", "te felicitan", "te equivocas delante de todos", "estrenas algo nuevo", "no entiendes la instruccion"]
+  },
+  "aula": {
+    "label": "En el aula (vida escolar)",
+    "words": ["mochila", "libro", "pizarra", "silla", "profesor", "examen", "tarea", "timbre", "recreo", "libreta", "lapiz", "carpeta", "ordenador", "biblioteca"],
+    "situations": ["llegas tarde", "no tienes el material", "te cuesta seguir la clase", "te piden leer en voz alta", "terminas antes que los demas"]
+  },
+  "amistad": {
+    "label": "Amistad y pares",
+    "words": ["amigo", "abrazo", "juego", "invitacion", "mensaje", "equipo", "secreto", "pelea", "perdon", "compartir", "turno", "grupo", "sonrisa"],
+    "situations": ["me invitan a sentarme", "quedan sin mi", "quiero entrar en un grupo", "alguien llora", "decido incluir a otro"]
+  },
+  "familia": {
+    "label": "Familia y casa",
+    "words": ["casa", "madre", "padre", "hermano", "abuelo", "mascota", "cena", "habitacion", "ducha", "cama", "television", "merienda", "regalo"],
+    "situations": ["cenamos todos juntos", "hay una discusion en casa", "me ayudan con los deberes", "me dejan salir con amigos"]
+  },
+  "patio": {
+    "label": "Patio / recreo",
+    "words": ["balon", "cuerda", "columpio", "cola", "arbol", "bocadillo", "botella", "ruido", "salida", "porteria", "cancha"],
+    "situations": ["no se con quien jugar", "hay mucho ruido", "me empujan", "encuentro un sitio tranquilo", "pierdo el turno"]
+  },
+  "redes": {
+    "label": "Redes y tecnologia (lado afectivo)",
+    "words": ["movil", "chat", "like", "video", "foto", "juego online", "notificacion", "auriculares", "pantalla", "grupo de WhatsApp"],
+    "situations": ["me dejan fuera del grupo", "alguien escribe algo feo", "espero su respuesta", "comparto algo que me gusta"]
+  },
+  "cuerpo": {
+    "label": "Cuerpo y autocuidado",
+    "words": ["agua", "comer", "dormir", "lavarse", "descanso", "ejercicio", "respirar", "abrigo", "luz", "tapones"],
+    "situations": ["necesito un descanso", "hay luz o ruido que molesta", "tengo hambre en clase", "hago ejercicios de calma"]
+  },
+  "conflictos": {
+    "label": "Conflictos y limites",
+    "words": ["turno", "norma", "espera", "ayuda", "disculpa", "acuerdo", "espacio", "gritos", "calmarse", "hablar"],
+    "situations": ["alguien no respeta mi espacio", "me piden algo que no quiero", "digo que no", "pedimos perdon"]
+  },
+  "pertenencia": {
+    "label": "Pertenencia e identidad",
+    "words": ["equipo", "camiseta", "color favorito", "musica", "aficion", "barrio", "nombre", "dibujo propio", "simbolo", "mascota"],
+    "situations": ["muestro lo que me gusta", "me siento parte del grupo", "me preguntan por mis gustos"]
+  },
+  "apoyo": {
+    "label": "Pedir y dar apoyo",
+    "words": ["mano", "ayuda", "pregunta", "guia", "profesor", "tutor", "enfermero", "escuchar", "acompanar", "explicar"],
+    "situations": ["pido ayuda en clase", "no entiendo y lo digo", "ayudo a otro", "alguien me explica despacio"]
+  },
+  "especiales": {
+    "label": "Momentos especiales",
+    "words": ["cumpleanos", "fiesta", "medalla", "viaje", "playa", "montana", "cine", "regalo", "foto", "cancion"],
+    "situations": ["me preparo para una fiesta", "estreno algo", "recuerdo algo bonito"]
+  },
+  "rutinas": {
+    "label": "Rutinas y transiciones (clave TEA)",
+    "words": ["reloj", "calendario", "campana", "cambio", "orden", "lista", "aviso", "tiempo", "pasos", "senal"],
+    "situations": ["termina una actividad", "cambio de aula", "imprevisto en el horario", "me avisan con tiempo"]
+  }
+}
