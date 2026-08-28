@@ -3,6 +3,7 @@ let clientId = localStorage.getItem('pid');
 if (!clientId) { clientId = 'c' + Math.random().toString(36).slice(2, 10); localStorage.setItem('pid', clientId); }
 
 let codeVal = null, aliasVal = null, canGuess = false, iAmDrawer = false, reconnectTimer = null;
+let currentGame = 'pinturillo';
 
 function applyCalm() {
   const on = $('calm').checked;
@@ -36,6 +37,7 @@ function connect() {
   };
 }
 
+let telefonoStepType = null;
 function onMsg(e) {
   const m = JSON.parse(e.data);
   if (m.type === 'joined') {
@@ -44,7 +46,20 @@ function onMsg(e) {
     if (m.reconnected) $('status').textContent = '¡Reconectado!';
   }
   if (m.type === 'error') $('status').textContent = 'Error: ' + m.msg;
+  if (m.type === 'game_selected') {
+    currentGame = m.game;
+    $('telefonoStatus').textContent = currentGame === 'telefono' ? 'Juego: Teléfono Dibujado' : 'Juego: Pinturillo';
+    // limpia estado al cambiar de juego
+    $('telefonoChainPlayer').style.display = 'none';
+    $('telefonoImage').style.display = 'none';
+    $('telefonoChainPlayer').innerHTML = '';
+  }
   if (m.type === 'round') {
+    currentGame = 'pinturillo';
+    telefonoStepType = null;
+    $('board').style.display = '';
+    $('telefonoImage').style.display = 'none';
+    $('telefonoChainPlayer').style.display = 'none';
     iAmDrawer = (m.drawerId === clientId);
     canGuess = !iAmDrawer;
     $('reward').style.display = 'none';
@@ -52,17 +67,81 @@ function onMsg(e) {
     $('timer').classList.remove('low');
     if (iAmDrawer) {
       $('drawerPanel').style.display = 'block';
+      $('telefonoSubmitBtn').style.display = 'none';
       $('wordToDraw').textContent = m.word || '';
       $('options').innerHTML = '';
       $('status').textContent = 'Es tu turno de dibujar. Los demás adivinan.';
     } else {
       $('drawerPanel').style.display = 'none';
+      $('telefonoSubmitBtn').style.display = 'none';
       renderOptions(m.options);
       $('feedback').textContent = '';
       $('feedback').className = '';
       $('status').textContent = '¡Adivina! Toca la tarjeta correcta.';
     }
   }
+  if (m.type === 'telefono_round') {
+    telefonoStepType = m.stepType;
+    currentGame = 'telefono';
+    $('reward').style.display = 'none';
+    $('feedback').textContent = ''; $('feedback').className = '';
+    $('timer').textContent = '';
+    $('telefonoChainPlayer').style.display = 'none';
+    if (m.stepType === 'draw') {
+      const isMe = m.drawerId === clientId;
+      iAmDrawer = isMe; canGuess = false;
+      $('board').style.display = '';
+      $('telefonoImage').style.display = 'none';
+      clearCanvas();
+      if (isMe) {
+        $('drawerPanel').style.display = 'block';
+        $('telefonoSubmitBtn').style.display = 'block';
+        $('telefonoSubmitBtn').disabled = false;
+        $('wordToDraw').textContent = m.word || '';
+        $('options').innerHTML = '';
+        $('status').textContent = `Tu turno de dibujar (${m.stepIndex + 1}/${m.totalSteps}) — ${m.word ? 'dibuja: ' + m.word : ''}`;
+      } else {
+        $('drawerPanel').style.display = 'none';
+        $('telefonoSubmitBtn').style.display = 'none';
+        $('wordToDraw').textContent = '';
+        $('options').innerHTML = '';
+        $('status').textContent = `${escapeHtml(m.alias || 'Alguien')} está dibujando... (${m.stepIndex + 1}/${m.totalSteps})`;
+      }
+    } else { // guess
+      const isMe = m.guesserId === clientId;
+      iAmDrawer = false; canGuess = isMe;
+      $('board').style.display = 'none';
+      $('drawerPanel').style.display = 'none';
+      $('telefonoSubmitBtn').style.display = 'none';
+      $('telefonoImage').style.display = m.imageData ? 'block' : 'none';
+      if (m.imageData) $('telefonoImage').src = m.imageData;
+      if (isMe) {
+        renderTelefonoOptions(m.options);
+        $('status').textContent = `Te toca elegir — ¿qué representa el dibujo? (${m.stepIndex + 1}/${m.totalSteps})`;
+      } else {
+        $('options').innerHTML = '';
+        $('status').textContent = `${escapeHtml(m.alias || 'Alguien')} está eligiendo... (${m.stepIndex + 1}/${m.totalSteps})`;
+      }
+    }
+  }
+  if (m.type === 'telefono_chain_reveal') {
+    $('board').style.display = 'none';
+    $('drawerPanel').style.display = 'none';
+    $('telefonoSubmitBtn').style.display = 'none';
+    $('telefonoImage').style.display = 'none';
+    $('options').innerHTML = '';
+    const box = $('telefonoChainPlayer');
+    box.style.display = 'block';
+    box.innerHTML = '<h3>Cadena completa</h3>' + m.chain.map((s, i) => {
+      if (s.type === 'draw') return `<div style="margin:8px 0;padding:8px;background:#f7fafc;border-radius:8px"><b>${i + 1}. ${escapeHtml(s.alias)} dibujó</b> ${s.word ? ' — <i>' + escapeHtml(s.word) + '</i>' : ''}<br>${s.imageData ? `<img src="${s.imageData}" style="max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:6px">` : '<span style="color:var(--soft)">(sin imagen)</span>'}</div>`;
+      else return `<div style="margin:8px 0;padding:8px;background:#ebf8ff;border-radius:8px"><b>${i + 1}. ${escapeHtml(s.alias)} eligió:</b> ${escapeHtml(s.guessText || '')}</div>`;
+    }).join('') + (m.initialWord ? `<p style="font-size:13px;color:var(--soft)">Palabra inicial: <b>${escapeHtml(m.initialWord)}</b></p>` : '');
+    $('status').textContent = '¡Cadena revelada!';
+  }
+  if (m.type === 'telefono_progress') { $('telefonoStatus').textContent = `Paso ${m.step}/${m.total}`; }
+  if (m.type === 'telefono_waiting_reveal') { $('status').textContent = 'Cadena lista. ¡El educador va a revelar!'; }
+  if (m.type === 'telefono_guess_result') { $('feedback').textContent = '¡Elección enviada!'; $('feedback').className = 'ok'; disableOptions(); canGuess = false; }
+  if (m.type === 'telefono_cleared') { $('telefonoChainPlayer').style.display = 'none'; $('telefonoChainPlayer').innerHTML = ''; $('telefonoImage').style.display = 'none'; $('board').style.display = ''; clearCanvas(); $('status').textContent = ''; }
   if (m.type === 'guess_result') {
     canGuess = false;
     if (m.correct) {
@@ -77,6 +156,7 @@ function onMsg(e) {
     disableOptions();
   }
   if (m.type === 'reveal') { $('status').textContent = 'Respuesta: ' + m.word; $('timer').textContent = ''; $('timer').classList.remove('low'); }
+  if (m.type === 'cleared') { $('wordToDraw').textContent = ''; $('options').innerHTML = ''; $('status').textContent = ''; $('telefonoChainPlayer').style.display = 'none'; $('telefonoImage').style.display = 'none'; $('board').style.display = ''; clearCanvas(); }
   if (m.type === 'tick') {
     $('timer').textContent = '⏱ ' + fmtTime(m.remaining);
     $('timer').classList.toggle('low', m.remaining <= 10);
@@ -97,9 +177,18 @@ function renderOptions(opts) {
     `<button class="card" data-id="${o.id}" onclick="guess(${o.id})">${escapeHtml(o.text)}</button>`
   ).join('');
 }
+function renderTelefonoOptions(opts) {
+  $('options').innerHTML = (opts || []).map(o =>
+    `<button class="card" data-id="${o.id}" onclick="guess(${o.id})">${escapeHtml(o.text)}</button>`
+  ).join('');
+}
 function guess(id) {
   if (!canGuess || !ws || ws.readyState !== 1) return;
-  ws.send(JSON.stringify({ type: 'guess', optionId: id }));
+  if (currentGame === 'telefono' && telefonoStepType === 'guess') {
+    ws.send(JSON.stringify({ type: 'telefono_guess', optionId: id }));
+  } else {
+    ws.send(JSON.stringify({ type: 'guess', optionId: id }));
+  }
 }
 function disableOptions() {
   document.querySelectorAll('#options .card').forEach(b => (b.disabled = true));
@@ -129,6 +218,15 @@ canvas.addEventListener('touchstart', start, { passive: false });
 canvas.addEventListener('touchmove', move, { passive: false });
 canvas.addEventListener('touchend', end);
 $('clearBtn').onclick = () => { clearCanvas(); if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'draw_clear' })); };
+$('telefonoSubmitBtn').onclick = () => {
+  if (!iAmDrawer || currentGame !== 'telefono' || telefonoStepType !== 'draw') return;
+  try {
+    const data = canvas.toDataURL('image/png');
+    ws.send(JSON.stringify({ type: 'telefono_submit_drawing', imageData: data }));
+    $('status').textContent = 'Dibujo enviado. Esperando al siguiente...';
+    $('telefonoSubmitBtn').disabled = true;
+  } catch (e) { $('status').textContent = 'Error al enviar dibujo'; }
+};
 
 function drawLine(a, b, color, size) {
   ctx.strokeStyle = color || '#000';

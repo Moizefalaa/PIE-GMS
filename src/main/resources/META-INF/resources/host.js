@@ -1,6 +1,7 @@
 const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
 const $ = id => document.getElementById(id);
 let code = null, lastCorrect = 0, tally = {};
+let currentGame = 'pinturillo';
 
 function fmtTime(s) {
   const m = Math.floor(s / 60), s2 = s % 60;
@@ -24,11 +25,29 @@ $('calm').checked = localStorage.getItem('calm') === '1' || window.matchMedia('(
 applyCalm();
 $('calm').addEventListener('change', applyCalm);
 
+function updateGameUI() {
+  const isTelefono = currentGame === 'telefono';
+  const p = document.getElementById('pinturilloOpts');
+  if (p) p.style.display = isTelefono ? 'none' : 'block';
+  $('start').textContent = isTelefono ? 'Iniciar Teléfono Dibujado' : 'Iniciar ronda';
+  $('revealBtn').textContent = isTelefono ? 'Revelar cadena' : 'Revelar respuesta';
+  $('telefonoStatus').textContent = isTelefono ? 'Teléfono: dibujo → elección en cadena' : '';
+  $('options').style.display = isTelefono ? 'none' : 'grid';
+  const tc = $('telefonoChain'); if (tc && !isTelefono) tc.style.display = 'none';
+}
+$('game').addEventListener('change', () => {
+  currentGame = $('game').value;
+  ws.send(JSON.stringify({ type: 'host_select_game', game: currentGame }));
+  updateGameUI();
+});
+updateGameUI();
+
 ws.onopen = () => ws.send(JSON.stringify({ type: 'host_create' }));
 ws.onmessage = (e) => {
   const m = JSON.parse(e.data);
   if (m.type === 'room_created') { code = m.code; $('code').textContent = code; }
   if (m.type === 'players') { renderPlayers(m.players); renderDrawerList(m.players, $('drawer').value); }
+  if (m.type === 'game_selected') { currentGame = m.game; $('game').value = m.game; updateGameUI(); if (m.game === 'telefono') $('status').textContent = 'Juego: Teléfono Dibujado'; }
   if (m.type === 'round') {
     iAmDrawer = (m.drawerId === 'host');
     canvas.style.opacity = iAmDrawer ? '1' : '0.85';
@@ -42,6 +61,42 @@ ws.onmessage = (e) => {
     $('revealBtn').disabled = false;
     $('status').textContent = iAmDrawer ? 'Ronda en curso · dibujas tú' : 'Ronda en curso · alguien dibuja';
   }
+  if (m.type === 'telefono_round') {
+    clearCanvas();
+    $('revealBtn').disabled = false;
+    $('wordBox').style.display = 'none';
+    const tc = $('telefonoChain');
+    if (tc) { tc.innerHTML = ''; tc.style.display = 'none'; }
+    if (m.stepType === 'draw') {
+      const isHostDraw = m.drawerId === 'host';
+      iAmDrawer = isHostDraw;
+      canvas.style.opacity = isHostDraw ? '1' : '0.85';
+      if (isHostDraw && m.word) { $('word').textContent = m.word; $('wordBox').style.display = 'block'; }
+      $('status').textContent = `Teléfono · Paso ${m.stepIndex + 1}/${m.totalSteps} · ${escapeHtml(m.alias)} dibuja` + (isHostDraw && m.word ? ': ' + escapeHtml(m.word) : '');
+    } else {
+      iAmDrawer = false; canvas.style.opacity = '0.85';
+      $('status').textContent = `Teléfono · Paso ${m.stepIndex + 1}/${m.totalSteps} · ${escapeHtml(m.alias)} está eligiendo`;
+      if (m.imageData) {
+        const tc2 = $('telefonoChain');
+        tc2.style.display = 'block';
+        tc2.innerHTML = `<p style="font-size:13px;color:var(--soft)">Dibujo previo:</p><img src="${m.imageData}" style="max-width:100%;border:1px solid var(--line);border-radius:8px">` +
+          (m.options ? `<div class="cards" style="margin-top:8px">${m.options.map(o=>`<div class="card">${escapeHtml(o.text)}</div>`).join('')}</div>` : '');
+      }
+    }
+  }
+  if (m.type === 'telefono_chain_reveal') {
+    const tc = $('telefonoChain');
+    tc.style.display = 'block';
+    tc.innerHTML = '<h3>Cadena completa</h3>' + m.chain.map((s, i) => {
+      if (s.type === 'draw') return `<div style="margin:8px 0;padding:8px;background:#f7fafc;border-radius:8px"><b>${i + 1}. ${escapeHtml(s.alias)} dibujó</b> ${s.word ? ' — <i>' + escapeHtml(s.word) + '</i>' : ''}<br>${s.imageData ? `<img src="${s.imageData}" style="max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:6px">` : '<span style="color:var(--soft)">(sin imagen)</span>'}</div>`;
+      else return `<div style="margin:8px 0;padding:8px;background:#ebf8ff;border-radius:8px"><b>${i + 1}. ${escapeHtml(s.alias)} eligió:</b> ${escapeHtml(s.guessText || '')}</div>`;
+    }).join('') + (m.initialWord ? `<p style="font-size:13px;color:var(--soft)">Palabra inicial: <b>${escapeHtml(m.initialWord)}</b></p>` : '');
+    $('status').textContent = '¡Cadena revelada!';
+    $('revealBtn').disabled = true;
+  }
+  if (m.type === 'telefono_progress') { $('progress').textContent = `Paso ${m.step}/${m.total}`; }
+  if (m.type === 'telefono_waiting_reveal') { $('status').textContent = 'Cadena lista. Pulsa Revelar cadena.'; $('revealBtn').disabled = false; }
+  if (m.type === 'telefono_cleared') { const tc = $('telefonoChain'); if (tc) { tc.innerHTML = ''; tc.style.display = 'none'; } $('wordBox').style.display = 'none'; $('status').textContent = ''; $('revealBtn').disabled = true; clearCanvas(); }
   if (m.type === 'progress') {
     if (m.correct > lastCorrect) { $('progress').classList.remove('bump'); void $('progress').offsetWidth; $('progress').classList.add('bump'); }
     lastCorrect = m.correct;
@@ -85,14 +140,24 @@ fetch('wordbank.json').then(r => r.json()).then(bank => {
   });
 });
 
-$('start').onclick = () => ws.send(JSON.stringify({
-  type: 'host_start',
-  category: $('category').value,
-  mode: $('mode').value,
-  drawerId: $('drawer').value,
-  timerEnabled: $('timerOn').checked,
-  timerSeconds: Math.max(10, parseInt($('timerSec').value, 10) || 90)
-}));
+$('start').onclick = () => {
+  if (currentGame === 'telefono') {
+    ws.send(JSON.stringify({
+      type: 'telefono_start',
+      category: $('category').value,
+      mode: $('mode').value
+    }));
+  } else {
+    ws.send(JSON.stringify({
+      type: 'host_start',
+      category: $('category').value,
+      mode: $('mode').value,
+      drawerId: $('drawer').value,
+      timerEnabled: $('timerOn').checked,
+      timerSeconds: Math.max(10, parseInt($('timerSec').value, 10) || 90)
+    }));
+  }
+};
 $('revealBtn').onclick = () => ws.send(JSON.stringify({ type: 'host_reveal' }));
 $('nextBtn').onclick = () => ws.send(JSON.stringify({ type: 'host_next' }));
 

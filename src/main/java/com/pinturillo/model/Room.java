@@ -17,6 +17,14 @@ public class Room {
     private boolean lastTimerEnabled;
     private int lastTimerSeconds;
 
+    // Hub + Teléfono Dibujado
+    private String currentGame; // "pinturillo" | "telefono" | null
+    private final java.util.List<TelefonoStep> telefonoChain = new CopyOnWriteArrayList<>();
+    private int telefonoStepIndex = 0;
+    private String telefonoCategory;
+    private String telefonoMode;
+    private String telefonoInitialWord;
+
     public Room(String code) {
         this.code = code;
     }
@@ -65,4 +73,20 @@ public class Room {
     public void setLastTimerEnabled(boolean lastTimerEnabled) { this.lastTimerEnabled = lastTimerEnabled; }
     public int getLastTimerSeconds() { return lastTimerSeconds; }
     public void setLastTimerSeconds(int lastTimerSeconds) { this.lastTimerSeconds = lastTimerSeconds; }
+
+    public String getCurrentGame() { return currentGame; }
+    public void setCurrentGame(String currentGame) { this.currentGame = currentGame; }
+    public java.util.List<TelefonoStep> getTelefonoChain() { return telefonoChain; }
+    public int getTelefonoStepIndex() { return telefonoStepIndex; }
+    public void setTelefonoStepIndex(int i) { this.telefonoStepIndex = i; }
+    public String getTelefonoCategory() { return telefonoCategory; }
+    public void setTelefonoCategory(String c) { this.telefonoCategory = c; }
+    public String getTelefonoMode() { return telefonoMode; }
+    public void setTelefonoMode(String m) { this.telefonoMode = m; }
+    public String getTelefonoInitialWord() { return telefonoInitialWord; }
+    public void setTelefonoInitialWord(String w) { this.telefonoInitialWord = w; }
+    public void clearTelefono() {
+        telefonoChain.clear(); telefonoStepIndex = 0;
+        telefonoCategory = null; telefonoMode = null; telefonoInitialWord = null;
+    }
 }

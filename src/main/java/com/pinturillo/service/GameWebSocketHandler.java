@@ -86,7 +86,104 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     r.put("mode", room.getRound().getMode());
                     send(session, r);
                 }
+                if (room.getCurrentGame() != null) {
+                    send(session, Map.of("type", "game_selected", "game", room.getCurrentGame()));
+                }
+                if (!room.getTelefonoChain().isEmpty()) {
+                    sendTelefonoRoundTo(session, room);
+                }
                 sendPlayers(room);
+            }
+            case "host_select_game" -> {
+                if (self == null || !"host".equals(self.role)) return;
+                String game = (String) msg.get("game");
+                if (game == null) game = "pinturillo";
+                Room room = roomService.getRoom(self.roomCode);
+                if (room == null) return;
+                room.setCurrentGame(game);
+                if ("telefono".equals(game)) {
+                    room.setRound(null);
+                    cancelTimer(self.roomCode);
+                    broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
+                } else {
+                    room.clearTelefono();
+                    broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
+                }
+                broadcast(self.roomCode, Map.of("type", "game_selected", "game", game), null);
+            }
+            case "telefono_start" -> {
+                if (self == null || !"host".equals(self.role)) return;
+                String code = self.roomCode;
+                String category = (String) msg.get("category");
+                String mode = (String) msg.get("mode");
+                Room room = roomService.getRoom(code);
+                if (room == null) return;
+                if (category == null) category = "emociones";
+                if (mode == null) mode = "words";
+                boolean ok = roomService.startTelefono(code, category, mode);
+                if (!ok) {
+                    send(session, Map.of("type", "error", "msg", "No se pudo iniciar Teléfono Dibujado"));
+                    return;
+                }
+                broadcast(code, Map.of("type", "draw_clear"), null);
+                sendTelefonoRound(room);
+            }
+            case "telefono_submit_drawing" -> {
+                if (self == null) return;
+                String imageData = (String) msg.get("imageData");
+                // imageData may be large; allow up to ~1MB base64
+                boolean ok = roomService.submitTelefonoDrawing(self.roomCode, self.clientId, imageData == null ? "" : imageData);
+                if (!ok) { send(session, Map.of("type", "error", "msg", "No se pudo guardar el dibujo")); return; }
+                Room room = roomService.getRoom(self.roomCode);
+                if (room == null) return;
+                // if chain still has next step (guess), send next round; else we are at final draw awaiting reveal
+                if (room.getTelefonoStepIndex() < room.getTelefonoChain().size()) {
+                    // check if next step is guess (we just advanced)
+                    com.pinturillo.model.TelefonoStep cur = room.getTelefonoChain().get(room.getTelefonoStepIndex());
+                    if ("guess".equals(cur.getType())) {
+                        sendTelefonoRound(room);
+                    } else {
+                        // edge: consecutive draws? should not happen, but send
+                        sendTelefonoRound(room);
+                    }
+                } else {
+                    // final draw submitted, chain at end — host can reveal
+                    broadcast(self.roomCode, Map.of("type", "telefono_waiting_reveal"), null);
+                }
+            }
+            case "telefono_guess" -> {
+                if (self == null) return;
+                Number n = (Number) msg.get("optionId");
+                if (n == null) return;
+                boolean ok = roomService.guessTelefono(self.roomCode, self.clientId, n.intValue());
+                if (!ok) { send(session, Map.of("type", "error", "msg", "No se pudo registrar la elección")); return; }
+                Room room = roomService.getRoom(self.roomCode);
+                if (room == null) return;
+                // send ack to guesser
+                Map<String, Object> ack = new HashMap<>();
+                ack.put("type", "telefono_guess_result");
+                // guess text for feedback
+                com.pinturillo.model.TelefonoStep cur = room.getTelefonoChain().get(room.getTelefonoStepIndex() - (room.getTelefonoStepIndex() < room.getTelefonoChain().size() && "draw".equals(room.getTelefonoChain().get(room.getTelefonoStepIndex()).getType()) ? 1 : 0));
+                // simpler: last guess step is previous
+                send(session, ack);
+                // advance check: if there is a next draw step, notify it
+                if (room.getTelefonoStepIndex() < room.getTelefonoChain().size()) {
+                    com.pinturillo.model.TelefonoStep next = room.getTelefonoChain().get(room.getTelefonoStepIndex());
+                    if ("draw".equals(next.getType())) {
+                        sendTelefonoRound(room);
+                    }
+                } else {
+                    broadcast(self.roomCode, Map.of("type", "telefono_waiting_reveal"), null);
+                }
+                // broadcast progress to host
+                Client host = findHost(self.roomCode);
+                if (host != null) {
+                    Map<String, Object> prog = new HashMap<>();
+                    prog.put("type", "telefono_progress");
+                    prog.put("step", room.getTelefonoStepIndex() + 1);
+                    prog.put("total", room.getPlayers().size());
+                    send(host.session, prog);
+                }
             }
             case "host_start" -> {
                 if (self == null || !"host".equals(self.role)) return;
@@ -122,7 +219,31 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 if (self == null || !"host".equals(self.role)) return;
                 cancelTimer(self.roomCode);
                 Room room = roomService.getRoom(self.roomCode);
-                if (room != null && room.getRound() != null) {
+                if (room == null) return;
+                if ("telefono".equals(room.getCurrentGame())) {
+                    // revela la cadena completa
+                    List<Map<String, Object>> chainView = new ArrayList<>();
+                    for (com.pinturillo.model.TelefonoStep s : room.getTelefonoChain()) {
+                        Map<String, Object> e = new HashMap<>();
+                        e.put("type", s.getType());
+                        e.put("playerId", s.getPlayerId());
+                        e.put("alias", s.getAlias());
+                        if ("draw".equals(s.getType())) {
+                            e.put("word", s.getWord());
+                            e.put("imageData", s.getImageData());
+                        } else {
+                            e.put("guessText", s.getGuessText());
+                            e.put("guessOptionId", s.getGuessOptionId());
+                            if (s.getOptions() != null) e.put("options", s.getOptions());
+                        }
+                        chainView.add(e);
+                    }
+                    Map<String, Object> rev = new HashMap<>();
+                    rev.put("type", "telefono_chain_reveal");
+                    rev.put("chain", chainView);
+                    rev.put("initialWord", room.getTelefonoInitialWord());
+                    broadcast(self.roomCode, rev, null);
+                } else if (room.getRound() != null) {
                     Map<String, Object> rev = new HashMap<>();
                     rev.put("type", "reveal");
                     rev.put("word", room.getRound().getWord());
@@ -135,6 +256,13 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 Room room = roomService.getRoom(self.roomCode);
                 if (room == null) return;
                 broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
+                if ("telefono".equals(room.getCurrentGame())) {
+                    room.clearTelefono();
+                    Client host = findHost(self.roomCode);
+                    if (host != null) send(host.session, Map.of("type", "cleared"));
+                    broadcast(self.roomCode, Map.of("type", "telefono_cleared"), null);
+                    return;
+                }
                 String prevDrawer = room.getRound() != null ? room.getRound().getDrawerId() : null;
                 room.setRound(null);
                 List<Player> ps = room.getPlayers();
@@ -232,6 +360,65 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             m.put("word", isDrawer ? room.getRound().getWord() : null);
             send(c.session, m);
         }
+    }
+
+    private void sendTelefonoRound(Room room) {
+        if (room.getTelefonoChain().isEmpty()) return;
+        int idx = room.getTelefonoStepIndex();
+        if (idx < 0 || idx >= room.getTelefonoChain().size()) return;
+        com.pinturillo.model.TelefonoStep cur = room.getTelefonoChain().get(idx);
+        for (Client c : clients.values()) {
+            if (!c.roomCode.equals(room.getCode())) continue;
+            Map<String, Object> m = new HashMap<>();
+            m.put("type", "telefono_round");
+            m.put("stepIndex", idx);
+            m.put("totalSteps", room.getPlayers().size());
+            m.put("stepType", cur.getType());
+            m.put("alias", cur.getAlias());
+            if ("draw".equals(cur.getType())) {
+                m.put("drawerId", cur.getPlayerId());
+                m.put("word", c.clientId.equals(cur.getPlayerId()) ? cur.getWord() : null);
+            } else {
+                m.put("guesserId", cur.getPlayerId());
+                String img = null;
+                if (idx > 0) {
+                    com.pinturillo.model.TelefonoStep prev = room.getTelefonoChain().get(idx - 1);
+                    if ("draw".equals(prev.getType())) img = prev.getImageData();
+                }
+                m.put("imageData", img);
+                m.put("options", cur.getOptions());
+            }
+            send(c.session, m);
+        }
+    }
+
+    private void sendTelefonoRoundTo(WebSocketSession session, Room room) {
+        if (room.getTelefonoChain().isEmpty()) return;
+        int idx = room.getTelefonoStepIndex();
+        if (idx < 0 || idx >= room.getTelefonoChain().size()) return;
+        com.pinturillo.model.TelefonoStep cur = room.getTelefonoChain().get(idx);
+        Client cli = clients.get(session.getId());
+        if (cli == null) return;
+        Map<String, Object> m = new HashMap<>();
+        m.put("type", "telefono_round");
+        m.put("stepIndex", idx);
+        m.put("totalSteps", room.getPlayers().size());
+        m.put("stepType", cur.getType());
+        m.put("alias", cur.getAlias());
+        if ("draw".equals(cur.getType())) {
+            m.put("drawerId", cur.getPlayerId());
+            m.put("word", cli.clientId.equals(cur.getPlayerId()) ? cur.getWord() : null);
+        } else {
+            m.put("guesserId", cur.getPlayerId());
+            String img = null;
+            if (idx > 0) {
+                com.pinturillo.model.TelefonoStep prev = room.getTelefonoChain().get(idx - 1);
+                if ("draw".equals(prev.getType())) img = prev.getImageData();
+            }
+            m.put("imageData", img);
+            m.put("options", cur.getOptions());
+        }
+        send(session, m);
     }
 
     private void scheduleTimer(Room room, int timerSeconds) {

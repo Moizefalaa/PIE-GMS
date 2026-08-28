@@ -49,17 +49,25 @@
 </header>
 <main>
   <section class="left">
+    <label>Juego</label>
+    <select id="game">
+      <option value="pinturillo">Pinturillo — dibujo y adivinanza</option>
+      <option value="telefono">Teléfono Dibujado — cadena colectiva</option>
+    </select>
+    <p id="gameDesc" style="font-size:13px;color:var(--soft)">Pinturillo: un dibuja, los demás adivinan. Teléfono: dibujo → elección → dibujo en cadena.</p>
     <label>Categoría</label>
     <select id="category"></select>
-    <label>Modo</label>
-    <select id="mode">
-      <option value="words">Palabra</option>
-      <option value="situations">Situación</option>
-    </select>
-    <label>Turno de dibujo</label>
-    <select id="drawer"><option value="host">Educador</option></select>
-    <label class="chk"><input type="checkbox" id="timerOn"> Temporizador (opcional, sin presión)</label>
-    <label>Segundos de la ronda <input type="number" id="timerSec" value="90" min="10" max="600" step="5"></label>
+    <div id="pinturilloOpts">
+      <label>Modo</label>
+      <select id="mode">
+        <option value="words">Palabra</option>
+        <option value="situations">Situación</option>
+      </select>
+      <label>Turno de dibujo</label>
+      <select id="drawer"><option value="host">Educador</option></select>
+      <label class="chk"><input type="checkbox" id="timerOn"> Temporizador (opcional, sin presión)</label>
+      <label>Segundos de la ronda <input type="number" id="timerSec" value="90" min="10" max="600" step="5"></label>
+    </div>
     <label class="chk"><input type="checkbox" id="calm"> Modo calma (sin movimiento, letras grandes)</label>
     <button id="start">Iniciar ronda</button>
     <button id="exportBtn">Exportar participación (CSV)</button>
@@ -74,6 +82,7 @@
     <p id="status"></p>
     <p id="timer"></p>
     <p id="progress"></p>
+    <p id="telefonoStatus" style="font-size:13px;color:var(--soft)"></p>
   </section>
   <section class="right">
     <canvas id="board" width="900" height="600"></canvas>
@@ -81,6 +90,7 @@
     <ul id="players"><li>(sin jugadores)</li></ul>
     <h3>Tarjetas de la ronda (referencia)</h3>
     <div id="options" class="cards"></div>
+    <div id="telefonoChain" style="display:none;margin-top:12px"></div>
   </section>
 </main>
 <script src="host.js"></script>

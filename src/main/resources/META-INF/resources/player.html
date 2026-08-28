@@ -49,9 +49,11 @@
   </div>
   <div id="game" style="display:none">
     <canvas id="board" width="600" height="400"></canvas>
+    <img id="telefonoImage" style="display:none;max-width:100%;border:2px solid var(--line);border-radius:12px;margin-top:10px">
     <div id="drawerPanel" style="display:none">
       <p>Toca para dibujar: <strong id="wordToDraw"></strong></p>
       <button id="clearBtn">Limpiar mi dibujo</button>
+      <button id="telefonoSubmitBtn" style="display:none;background:var(--ok)">Enviar dibujo</button>
     </div>
     <p id="timer"></p>
     <div id="reward" style="display:none">
@@ -60,7 +62,9 @@
     </div>
     <div id="feedback"></div>
     <div id="options" class="cards"></div>
+    <div id="telefonoChainPlayer" style="display:none;margin-top:12px"></div>
     <p id="status"></p>
+    <p id="telefonoStatus" style="font-size:13px;color:var(--soft)"></p>
   </div>
 </div>
 <script src="player.js"></script>
