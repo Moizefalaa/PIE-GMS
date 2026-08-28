@@ -292,7 +292,12 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     private void send(WebSocketSession s, Object msg) {
         if (s == null || !s.isOpen()) return;
         try {
-            s.sendMessage(new TextMessage(mapper.writeValueAsString(msg)));
+            String payload = mapper.writeValueAsString(msg);
+            // Serializa escrituras: el hilo del temporizador (tick) y el de mensajes
+            // pueden escribir a la misma sesion a la vez y sendMessage no es thread-safe.
+            synchronized (s) {
+                s.sendMessage(new TextMessage(payload));
+            }
         } catch (Exception ignored) {
         }
     }
