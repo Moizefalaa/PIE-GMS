@@ -1,5 +1,6 @@
 package com.pinturillo.service;
 
+import com.pinturillo.model.AmediasStory;
 import com.pinturillo.model.Category;
 import com.pinturillo.model.GuessResult;
 import com.pinturillo.model.Player;
@@ -20,9 +21,32 @@ public class RoomService {
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final WordBankService wordBank;
     private final SecureRandom random = new SecureRandom();
+    private final List<AmediasStory> amediasBank;
 
     public RoomService(WordBankService wordBank) {
         this.wordBank = wordBank;
+        this.amediasBank = buildAmediasBank();
+    }
+
+    private List<AmediasStory> buildAmediasBank() {
+        List<AmediasStory> l = new ArrayList<>();
+        l.add(new AmediasStory("Llegas y tu sitio está ocupado.",
+            List.of(new Round.Option(0, "Pides permiso con calma"), new Round.Option(1, "Empujas sin hablar"), new Round.Option(2, "Te vas sin decir nada"), new Round.Option(3, "Gritas")), 0));
+        l.add(new AmediasStory("Un compañero toma tu turno sin pedirlo.",
+            List.of(new Round.Option(0, "Le dices tranquilo que era tu turno"), new Round.Option(1, "Le gritas"), new Round.Option(2, "Te quedas callado y triste"), new Round.Option(3, "Se lo quitas de la mano")), 0));
+        l.add(new AmediasStory("Alguien hace un chiste que no entiendes.",
+            List.of(new Round.Option(0, "Preguntas con curiosidad qué quiere decir"), new Round.Option(1, "Te ríes aunque no entiendas"), new Round.Option(2, "Te enfadas"), new Round.Option(3, "Te aíslas")), 0));
+        l.add(new AmediasStory("En el recreo nadie te invita a jugar.",
+            List.of(new Round.Option(0, "Te acercas y propones un juego"), new Round.Option(1, "Esperas solo sin decir nada"), new Round.Option(2, "Insultas"), new Round.Option(3, "Te vas llorando")), 0));
+        l.add(new AmediasStory("Tu familia cambia planes a último momento.",
+            List.of(new Round.Option(0, "Preguntas qué pasará y respiras"), new Round.Option(1, "Gritas que no es justo"), new Round.Option(2, "Te encierras"), new Round.Option(3, "Golpeas la mesa")), 0));
+        l.add(new AmediasStory("En redes alguien escribe algo que te duele.",
+            List.of(new Round.Option(0, "Pides ayuda a un adulto de confianza"), new Round.Option(1, "Respondes con insultos"), new Round.Option(2, "Borras todo sin hablar"), new Round.Option(3, "Sigues leyendo y te angustias")), 0));
+        l.add(new AmediasStory("Te piden cambiar de actividad muy rápido.",
+            List.of(new Round.Option(0, "Pides un minuto y un aviso"), new Round.Option(1, "Te tiras al suelo"), new Round.Option(2, "No haces caso"), new Round.Option(3, "Gritas") ), 0));
+        l.add(new AmediasStory("Ves que dos amigos discuten.",
+            List.of(new Round.Option(0, "Preguntas si puedes ayudar o te apartas"), new Round.Option(1, "Te metes gritando"), new Round.Option(2, "Te ríes de ellos"), new Round.Option(3, "Hablas mal de uno a sus espaldas")), 0));
+        return l;
     }
 
     public Room createRoom() {
@@ -225,5 +249,56 @@ public class RoomService {
         int id = 0;
         for (String t : all) options.add(new Round.Option(id++, t));
         return options;
+    }
+
+    // ===== A Medias =====
+    public AmediasStory startAmedias(String code) {
+        Room room = rooms.get(code);
+        if (room == null) return null;
+        room.clearAmedias();
+        room.clearTelefono();
+        room.setRound(null);
+        room.setCurrentGame("amedias");
+        cancelRitmo(room);
+        AmediasStory s = amediasBank.get(random.nextInt(amediasBank.size()));
+        // clone options to avoid mutation
+        List<Round.Option> opts = new ArrayList<>(s.getOptions());
+        Collections.shuffle(opts);
+        // need to find new correctId after shuffle
+        int newCorrect = -1;
+        for (Round.Option o : opts) if (o.getText().equals(s.getCorrectText())) newCorrect = o.getId();
+        AmediasStory picked = new AmediasStory(s.getPrompt(), opts, newCorrect);
+        room.setAmediasCurrent(picked);
+        return picked;
+    }
+
+    public boolean voteAmedias(String code, String clientId, int optionId) {
+        Room room = rooms.get(code);
+        if (room == null || room.getAmediasCurrent() == null) return false;
+        // prevent double vote
+        if (room.getAmediasVotes().containsKey(clientId)) return false;
+        boolean valid = room.getAmediasCurrent().getOptions().stream().anyMatch(o -> o.getId() == optionId);
+        if (!valid) return false;
+        room.getAmediasVotes().put(clientId, optionId);
+        return true;
+    }
+
+    // ===== Ritmo de Calma =====
+    public boolean startRitmo(String code, int cycles, int cycleMs) {
+        Room room = rooms.get(code);
+        if (room == null) return false;
+        room.clearAmedias();
+        room.clearTelefono();
+        room.setRound(null);
+        room.setCurrentGame("ritmo");
+        room.setRitmoActive(true);
+        room.setRitmoCycles(cycles <= 0 ? 5 : cycles);
+        room.setRitmoCycleMs(cycleMs <= 0 ? 8000 : cycleMs);
+        room.setRitmoStartAt(System.currentTimeMillis());
+        return true;
+    }
+
+    private void cancelRitmo(Room room) {
+        if (room != null) room.clearRitmo();
     }
 }

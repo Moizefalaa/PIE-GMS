@@ -26,13 +26,16 @@ applyCalm();
 $('calm').addEventListener('change', applyCalm);
 
 function updateGameUI() {
+  const isPinturillo = currentGame === 'pinturillo';
   const isTelefono = currentGame === 'telefono';
+  const isAmedias = currentGame === 'amedias';
+  const isRitmo = currentGame === 'ritmo';
   const p = document.getElementById('pinturilloOpts');
-  if (p) p.style.display = isTelefono ? 'none' : 'block';
-  $('start').textContent = isTelefono ? 'Iniciar Teléfono Dibujado' : 'Iniciar ronda';
-  $('revealBtn').textContent = isTelefono ? 'Revelar cadena' : 'Revelar respuesta';
-  $('telefonoStatus').textContent = isTelefono ? 'Teléfono: dibujo → elección en cadena' : '';
-  $('options').style.display = isTelefono ? 'none' : 'grid';
+  if (p) p.style.display = isPinturillo ? 'block' : 'none';
+  $('start').textContent = isTelefono ? 'Iniciar Teléfono Dibujado' : isAmedias ? 'Iniciar historia' : isRitmo ? 'Iniciar ritmo' : 'Iniciar ronda';
+  $('revealBtn').textContent = isTelefono ? 'Revelar cadena' : isAmedias ? 'Revelar final' : 'Revelar respuesta';
+  $('telefonoStatus').textContent = isTelefono ? 'Teléfono: dibujo → elección en cadena' : isAmedias ? 'A Medias: votan el final juntos' : isRitmo ? 'Ritmo: respiran juntos siguiendo el círculo' : '';
+  $('options').style.display = (isPinturillo || isAmedias) ? 'grid' : 'none';
   const tc = $('telefonoChain'); if (tc && !isTelefono) tc.style.display = 'none';
 }
 $('game').addEventListener('change', () => {
@@ -97,6 +100,40 @@ ws.onmessage = (e) => {
   if (m.type === 'telefono_progress') { $('progress').textContent = `Paso ${m.step}/${m.total}`; }
   if (m.type === 'telefono_waiting_reveal') { $('status').textContent = 'Cadena lista. Pulsa Revelar cadena.'; $('revealBtn').disabled = false; }
   if (m.type === 'telefono_cleared') { const tc = $('telefonoChain'); if (tc) { tc.innerHTML = ''; tc.style.display = 'none'; } $('wordBox').style.display = 'none'; $('status').textContent = ''; $('revealBtn').disabled = true; clearCanvas(); }
+  if (m.type === 'amedias_round') {
+    clearCanvas(); $('wordBox').style.display = 'none'; $('revealBtn').disabled = false;
+    $('status').textContent = 'A Medias · ' + m.prompt;
+    renderOptions(m.options);
+    $('progress').textContent = 'Votos: 0';
+    lastCorrect = 0;
+  }
+  if (m.type === 'amedias_vote_event') {
+    const t = tally[m.clientId] || (tally[m.clientId] = { alias: m.alias, correct: 0 });
+    t.alias = m.alias;
+    renderPlayers(playersCache);
+  }
+  if (m.type === 'amedias_progress') { $('progress').textContent = `Votos: ${m.votes}/${m.total}`; }
+  if (m.type === 'amedias_reveal') {
+    $('status').textContent = 'Final: ' + m.correctText;
+    const tc = $('telefonoChain'); tc.style.display = 'block';
+    const cnt = m.tally || {};
+    tc.innerHTML = `<h3>Resultado</h3><p><b>${escapeHtml(m.prompt)}</b></p>` +
+      m.options.map(o => {
+        const c = cnt[o.id] || 0;
+        const isCorrect = o.id === m.correctId;
+        return `<div class="card" style="${isCorrect?'border-color:var(--ok);background:#f0fff4':''}">${escapeHtml(o.text)} ${isCorrect?'✓':''} — ${c} voto(s)</div>`;
+      }).join('');
+    $('revealBtn').disabled = true;
+  }
+  if (m.type === 'amedias_cleared') { const tc=$('telefonoChain'); if(tc){tc.innerHTML='';tc.style.display='none';} $('options').innerHTML=''; $('status').textContent=''; $('progress').textContent=''; clearCanvas(); }
+  if (m.type === 'ritmo_round') {
+    $('status').textContent = `Ritmo · ${m.cycles} ciclos · respira con el círculo`;
+    $('progress').textContent = '';
+    clearCanvas(); drawBreathingCircle();
+  }
+  if (m.type === 'ritmo_tap_event') { $('progress').textContent = `${escapeHtml(m.alias)} tocó ♡`; }
+  if (m.type === 'ritmo_end') { $('status').textContent = 'Ritmo completado. ¡Bien!'; $('progress').textContent = ''; }
+  if (m.type === 'ritmo_cleared') { $('status').textContent = ''; $('progress').textContent=''; clearCanvas(); }
   if (m.type === 'progress') {
     if (m.correct > lastCorrect) { $('progress').classList.remove('bump'); void $('progress').offsetWidth; $('progress').classList.add('bump'); }
     lastCorrect = m.correct;
@@ -142,11 +179,11 @@ fetch('wordbank.json').then(r => r.json()).then(bank => {
 
 $('start').onclick = () => {
   if (currentGame === 'telefono') {
-    ws.send(JSON.stringify({
-      type: 'telefono_start',
-      category: $('category').value,
-      mode: $('mode').value
-    }));
+    ws.send(JSON.stringify({ type: 'telefono_start', category: $('category').value, mode: $('mode').value }));
+  } else if (currentGame === 'amedias') {
+    ws.send(JSON.stringify({ type: 'amedias_start' }));
+  } else if (currentGame === 'ritmo') {
+    ws.send(JSON.stringify({ type: 'ritmo_start', cycles: 5, cycleMs: 8000 }));
   } else {
     ws.send(JSON.stringify({
       type: 'host_start',
@@ -198,6 +235,13 @@ function drawLine(a, b) {
   ctx.stroke();
 }
 function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+function drawBreathingCircle() {
+  clearCanvas();
+  const cx = canvas.width/2, cy = canvas.height/2, r = Math.min(canvas.width, canvas.height)*0.18;
+  ctx.fillStyle = '#bee3f8'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#2b6cb0'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = '#2d3748'; ctx.font = '18px system-ui'; ctx.textAlign='center'; ctx.fillText('Respira', cx, cy+6);
+}
 
 canvas.addEventListener('mousedown', start);
 canvas.addEventListener('mousemove', move);

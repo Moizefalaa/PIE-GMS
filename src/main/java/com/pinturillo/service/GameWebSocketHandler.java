@@ -92,6 +92,21 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 if (!room.getTelefonoChain().isEmpty()) {
                     sendTelefonoRoundTo(session, room);
                 }
+                if (room.getAmediasCurrent() != null) {
+                    Map<String,Object> m2 = new HashMap<>();
+                    m2.put("type","amedias_round");
+                    m2.put("prompt", room.getAmediasCurrent().getPrompt());
+                    m2.put("options", room.getAmediasCurrent().getOptions());
+                    send(session, m2);
+                }
+                if (room.isRitmoActive()) {
+                    Map<String,Object> m2 = new HashMap<>();
+                    m2.put("type","ritmo_round");
+                    m2.put("cycles", room.getRitmoCycles());
+                    m2.put("cycleMs", room.getRitmoCycleMs());
+                    m2.put("startAt", room.getRitmoStartAt());
+                    send(session, m2);
+                }
                 sendPlayers(room);
             }
             case "host_select_game" -> {
@@ -101,14 +116,12 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 Room room = roomService.getRoom(self.roomCode);
                 if (room == null) return;
                 room.setCurrentGame(game);
-                if ("telefono".equals(game)) {
-                    room.setRound(null);
-                    cancelTimer(self.roomCode);
-                    broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
-                } else {
-                    room.clearTelefono();
-                    broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
-                }
+                room.setRound(null);
+                room.clearTelefono();
+                room.clearAmedias();
+                room.clearRitmo();
+                cancelTimer(self.roomCode);
+                broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
                 broadcast(self.roomCode, Map.of("type", "game_selected", "game", game), null);
             }
             case "telefono_start" -> {
@@ -185,6 +198,79 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     send(host.session, prog);
                 }
             }
+            case "amedias_start" -> {
+                if (self == null || !"host".equals(self.role)) return;
+                String code = self.roomCode;
+                com.pinturillo.model.AmediasStory story = roomService.startAmedias(code);
+                if (story == null) { send(session, Map.of("type","error","msg","No se pudo iniciar A Medias")); return; }
+                broadcast(code, Map.of("type","draw_clear"), null);
+                Map<String,Object> m2 = new HashMap<>();
+                m2.put("type","amedias_round");
+                m2.put("prompt", story.getPrompt());
+                m2.put("options", story.getOptions());
+                broadcast(code, m2, null);
+            }
+            case "amedias_guess" -> {
+                if (self == null) return;
+                Number n = (Number) msg.get("optionId");
+                if (n == null) return;
+                boolean ok = roomService.voteAmedias(self.roomCode, self.clientId, n.intValue());
+                if (!ok) { send(session, Map.of("type","error","msg","Ya votaste o opción inválida")); return; }
+                send(session, Map.of("type","amedias_guess_result"));
+                Room room = roomService.getRoom(self.roomCode);
+                Client host = findHost(self.roomCode);
+                if (host != null) {
+                    Map<String,Object> ev = new HashMap<>();
+                    ev.put("type","amedias_vote_event");
+                    ev.put("clientId", self.clientId);
+                    Player p = room != null ? room.getPlayers().stream().filter(x->x.getClientId().equals(self.clientId)).findFirst().orElse(null) : null;
+                    ev.put("alias", p!=null? p.getAlias():"");
+                    ev.put("optionId", n.intValue());
+                    send(host.session, ev);
+                    Map<String,Object> prog = new HashMap<>();
+                    prog.put("type","amedias_progress");
+                    prog.put("votes", room != null ? room.getAmediasVotes().size() : 0);
+                    prog.put("total", room != null ? room.getPlayers().size() : 0);
+                    send(host.session, prog);
+                }
+            }
+            case "ritmo_start" -> {
+                if (self == null || !"host".equals(self.role)) return;
+                String code = self.roomCode;
+                Number cyc = (Number) msg.get("cycles");
+                Number ms = (Number) msg.get("cycleMs");
+                int cycles = cyc==null?5:cyc.intValue();
+                int cycleMs = ms==null?8000:ms.intValue();
+                boolean ok = roomService.startRitmo(code, cycles, cycleMs);
+                if (!ok) { send(session, Map.of("type","error","msg","No se pudo iniciar Ritmo")); return; }
+                Room room = roomService.getRoom(code);
+                Map<String,Object> m2 = new HashMap<>();
+                m2.put("type","ritmo_round");
+                m2.put("cycles", room.getRitmoCycles());
+                m2.put("cycleMs", room.getRitmoCycleMs());
+                m2.put("startAt", room.getRitmoStartAt());
+                broadcast(code, m2, null);
+                long totalMs = (long) room.getRitmoCycles() * room.getRitmoCycleMs();
+                scheduler.schedule(() -> {
+                    Room r = roomService.getRoom(code);
+                    if (r != null && r.isRitmoActive()) {
+                        r.setRitmoActive(false);
+                        broadcast(code, Map.of("type","ritmo_end"), null);
+                    }
+                }, totalMs, TimeUnit.MILLISECONDS);
+            }
+            case "ritmo_tap" -> {
+                if (self == null) return;
+                Client host = findHost(self.roomCode);
+                if (host != null) {
+                    Map<String,Object> ev = new HashMap<>();
+                    ev.put("type","ritmo_tap_event");
+                    ev.put("clientId", self.clientId);
+                    Player p = roomService.getRoom(self.roomCode) != null ? roomService.getRoom(self.roomCode).getPlayers().stream().filter(x->x.getClientId().equals(self.clientId)).findFirst().orElse(null) : null;
+                    ev.put("alias", p!=null? p.getAlias():"");
+                    send(host.session, ev);
+                }
+            }
             case "host_start" -> {
                 if (self == null || !"host".equals(self.role)) return;
                 String code = self.roomCode;
@@ -220,6 +306,27 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 cancelTimer(self.roomCode);
                 Room room = roomService.getRoom(self.roomCode);
                 if (room == null) return;
+                if ("amedias".equals(room.getCurrentGame())) {
+                    com.pinturillo.model.AmediasStory s = room.getAmediasCurrent();
+                    if (s != null) {
+                        Map<Integer,Integer> counts = new HashMap<>();
+                        for (int v : room.getAmediasVotes().values()) counts.merge(v, 1, Integer::sum);
+                        Map<String,Object> rev = new HashMap<>();
+                        rev.put("type","amedias_reveal");
+                        rev.put("correctId", s.getCorrectId());
+                        rev.put("correctText", s.getCorrectText());
+                        rev.put("prompt", s.getPrompt());
+                        rev.put("options", s.getOptions());
+                        rev.put("tally", counts);
+                        broadcast(self.roomCode, rev, null);
+                    }
+                    return;
+                }
+                if ("ritmo".equals(room.getCurrentGame())) {
+                    room.setRitmoActive(false);
+                    broadcast(self.roomCode, Map.of("type","ritmo_end"), null);
+                    return;
+                }
                 if ("telefono".equals(room.getCurrentGame())) {
                     // revela la cadena completa
                     List<Map<String, Object>> chainView = new ArrayList<>();
@@ -256,6 +363,20 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 Room room = roomService.getRoom(self.roomCode);
                 if (room == null) return;
                 broadcast(self.roomCode, Map.of("type", "draw_clear"), null);
+                if ("amedias".equals(room.getCurrentGame())) {
+                    room.clearAmedias();
+                    Client host = findHost(self.roomCode);
+                    if (host != null) send(host.session, Map.of("type","cleared"));
+                    broadcast(self.roomCode, Map.of("type","amedias_cleared"), null);
+                    return;
+                }
+                if ("ritmo".equals(room.getCurrentGame())) {
+                    room.clearRitmo();
+                    Client host = findHost(self.roomCode);
+                    if (host != null) send(host.session, Map.of("type","cleared"));
+                    broadcast(self.roomCode, Map.of("type","ritmo_cleared"), null);
+                    return;
+                }
                 if ("telefono".equals(room.getCurrentGame())) {
                     room.clearTelefono();
                     Client host = findHost(self.roomCode);

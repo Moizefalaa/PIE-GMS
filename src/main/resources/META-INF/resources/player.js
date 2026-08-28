@@ -161,6 +161,41 @@ function onMsg(e) {
     $('timer').textContent = '⏱ ' + fmtTime(m.remaining);
     $('timer').classList.toggle('low', m.remaining <= 10);
   }
+  if (m.type === 'amedias_round') {
+    currentGame = 'amedias'; telefonoStepType = null;
+    $('board').style.display = 'none'; $('telefonoImage').style.display = 'none'; $('ritmoBox').style.display = 'none';
+    $('drawerPanel').style.display = 'none'; $('telefonoSubmitBtn').style.display = 'none';
+    $('amediasPrompt').style.display = 'block'; $('amediasPrompt').textContent = m.prompt;
+    $('telefonoChainPlayer').style.display = 'none';
+    renderAmediasOptions(m.options);
+    $('feedback').textContent = ''; $('feedback').className = '';
+    $('status').textContent = 'Elige la mejor respuesta';
+    canGuess = true; iAmDrawer = false;
+  }
+  if (m.type === 'amedias_guess_result') { $('feedback').textContent = '¡Voto registrado!'; $('feedback').className='ok'; disableOptions(); canGuess=false; }
+  if (m.type === 'amedias_reveal') {
+    $('amediasPrompt').style.display = 'block';
+    $('options').innerHTML = m.options.map(o => {
+      const cnt = m.tally ? (m.tally[o.id]||0) : 0;
+      const isCorrect = o.id === m.correctId;
+      return `<div class="card" style="${isCorrect?'border-color:var(--ok);background:#f0fff4':''}">${escapeHtml(o.text)} ${isCorrect?'✓':''} — ${cnt} voto(s)</div>`;
+    }).join('');
+    $('feedback').textContent = 'Respuesta más serena: ' + m.correctText;
+    $('feedback').className = 'ok';
+    $('status').textContent = '¡Revelado!';
+    canGuess = false;
+  }
+  if (m.type === 'amedias_cleared') { $('amediasPrompt').style.display='none'; $('options').innerHTML=''; $('feedback').textContent=''; $('status').textContent=''; canGuess=false; }
+  if (m.type === 'ritmo_round') {
+    currentGame = 'ritmo'; telefonoStepType = null;
+    $('board').style.display = 'none'; $('telefonoImage').style.display='none'; $('drawerPanel').style.display='none';
+    $('amediasPrompt').style.display='none'; $('options').innerHTML=''; $('telefonoChainPlayer').style.display='none';
+    $('ritmoBox').style.display = 'block';
+    $('status').textContent = 'Ritmo de Calma — respira con el círculo';
+    startRitmoAnimation(m.cycles, m.cycleMs);
+  }
+  if (m.type === 'ritmo_end') { $('status').textContent='¡Ritmo completado! Muy bien.'; stopRitmoAnimation(); }
+  if (m.type === 'ritmo_cleared') { $('ritmoBox').style.display='none'; stopRitmoAnimation(); $('status').textContent=''; }
   if (m.type === 'draw_clear') clearCanvas();
   if (m.type === 'draw') drawLine(m.from, m.to, m.color, m.size);
 }
@@ -186,9 +221,33 @@ function guess(id) {
   if (!canGuess || !ws || ws.readyState !== 1) return;
   if (currentGame === 'telefono' && telefonoStepType === 'guess') {
     ws.send(JSON.stringify({ type: 'telefono_guess', optionId: id }));
+  } else if (currentGame === 'amedias') {
+    ws.send(JSON.stringify({ type: 'amedias_guess', optionId: id }));
   } else {
     ws.send(JSON.stringify({ type: 'guess', optionId: id }));
   }
+}
+function renderAmediasOptions(opts) {
+  $('options').innerHTML = (opts||[]).map(o=>`<button class="card" data-id="${o.id}" onclick="guess(${o.id})">${escapeHtml(o.text)}</button>`).join('');
+}
+let ritmoTimer = null, ritmoScale = 1;
+function startRitmoAnimation(cycles, cycleMs){
+  stopRitmoAnimation();
+  const c = $('ritmoCircle');
+  let inhaling = true;
+  const half = cycleMs/2;
+  c.style.transition = `transform ${half}ms ease`;
+  function tick(){
+    c.style.transform = inhaling ? 'scale(1.45)' : 'scale(1)';
+    inhaling = !inhaling;
+  }
+  tick();
+  ritmoTimer = setInterval(tick, half);
+}
+function stopRitmoAnimation(){
+  if (ritmoTimer) clearInterval(ritmoTimer);
+  ritmoTimer = null;
+  const c=$('ritmoCircle'); if(c) c.style.transform='scale(1)';
 }
 function disableOptions() {
   document.querySelectorAll('#options .card').forEach(b => (b.disabled = true));
@@ -227,6 +286,12 @@ $('telefonoSubmitBtn').onclick = () => {
     $('telefonoSubmitBtn').disabled = true;
   } catch (e) { $('status').textContent = 'Error al enviar dibujo'; }
 };
+$('ritmoTapBtn').onclick = () => {
+  if (currentGame !== 'ritmo' || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'ritmo_tap' }));
+  const c=$('ritmoCircle'); c.style.background='#fbd38d'; setTimeout(()=>c.style.background='#bee3f8', 200);
+};
+$('ritmoCircle').onclick = () => $('ritmoTapBtn').click();
 
 function drawLine(a, b, color, size) {
   ctx.strokeStyle = color || '#000';
